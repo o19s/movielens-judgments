@@ -25,6 +25,19 @@ def movieDict(moviesFile='ml-20m/movies.csv'):
     return moviesToName
 
 
+def tmdbIdLookup(moviesFile='ml-20m/links.csv'):
+    rdr = csv.reader(open(moviesFile))
+    next(rdr, None)
+
+    mlensToTmdb = {}
+
+    for row in rdr:
+        movieId = row[0]; tmdbId=row[2]
+        mlensToTmdb[movieId] = tmdbId
+
+    return mlensToTmdb
+
+
 def genomeTagged(genomeFile='ml-20m/genome-scores.csv'):
     rdr = csv.reader(open(genomeFile))
     next(rdr, None)
@@ -46,9 +59,28 @@ def genomeTagged(genomeFile='ml-20m/genome-scores.csv'):
     return tagsToMovies
 
 
-def printBestMoviesPerTag(tags, movies, tagsToMovies):
+def printBestMoviesPerTag(tags, movies, mlensToTmdbId, tagsToMovies):
     for tagId, scoredMovies in tagsToMovies.items():
-        print(tags[tagId])
+        tagName = tags[tagId]
+        print(tagName)
+        for movie in scoredMovies:
+            score = float(movie[1])
+            movieId = movie[0]
+            movieName = movies[movieId]
+            tmdbId = mlensToTmdbId[movieId]
+            grade = 0
+
+            if score >= 0.9:
+                grade = 4
+            elif score >= 0.8:
+                grade = 3
+            elif score >= 0.6:
+                grade = 2
+            elif score >= 0.4:
+                grade = 1
+            print("%s: %s - TMDB ID %s" % (grade, movieName, tmdbId))
+
+
         for i in range(0,5):
             print("  %s %s" % (movies[scoredMovies[i][0]], scoredMovies[i][1]))
         print("  =================")
@@ -63,6 +95,8 @@ if __name__ == "__main__":
     tags = tagDict()
     movies = movieDict()
     tagsToMovies = genomeTagged()
-    printBestMoviesPerTag(tags, movies, tagsToMovies)
+    mlensToTmdbId = tmdbIdLookup()
+
+    printBestMoviesPerTag(tags, movies, mlensToTmdbId, tagsToMovies)
 
 
