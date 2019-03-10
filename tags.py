@@ -1,4 +1,5 @@
 import csv
+from judgments import Judgment, judgmentsToFile
 
 def tagDict(tagsFile='ml-20m/genome-tags.csv'):
     rdr = csv.reader(open(tagsFile))
@@ -55,18 +56,19 @@ def genomeTagged(genomeFile='ml-20m/genome-scores.csv'):
     for tagId, scoredMovies in tagsToMovies.items():
         scoredMovies.sort(key=lambda x: x[1], reverse=True)
 
-
     return tagsToMovies
 
 
-def printBestMoviesPerTag(tags, movies, mlensToTmdbId, tagsToMovies):
+def buildJudgments(tags, movies, mlensToTmdbId, tagsToMovies):
+    print("Building Judgments")
+    qid = 1
+    judgments = []
     for tagId, scoredMovies in tagsToMovies.items():
         tagName = tags[tagId]
-        print(tagName)
         for movie in scoredMovies:
             score = float(movie[1])
             movieId = movie[0]
-            movieName = movies[movieId]
+            #movieName = movies[movieId]
             tmdbId = mlensToTmdbId[movieId]
             grade = 0
 
@@ -78,17 +80,12 @@ def printBestMoviesPerTag(tags, movies, mlensToTmdbId, tagsToMovies):
                 grade = 2
             elif score >= 0.4:
                 grade = 1
-            print("%s: %s - TMDB ID %s" % (grade, movieName, tmdbId))
 
-
-        for i in range(0,5):
-            print("  %s %s" % (movies[scoredMovies[i][0]], scoredMovies[i][1]))
-        print("  =================")
-        for i in range(60,70):
-            print("  %s %s" % (movies[scoredMovies[i][0]], scoredMovies[i][1]))
-        print("  =================")
-        for i in range(1,6):
-            print("  %s %s" % (movies[scoredMovies[-i][0]], scoredMovies[-i][1]))
+            judgment = Judgment(grade=grade, qid=qid,
+                                keywords=tagName, docId=tmdbId)
+            judgments.append(judgment)
+        qid += 1
+    return judgments
 
 
 if __name__ == "__main__":
@@ -97,6 +94,8 @@ if __name__ == "__main__":
     tagsToMovies = genomeTagged()
     mlensToTmdbId = tmdbIdLookup()
 
-    printBestMoviesPerTag(tags, movies, mlensToTmdbId, tagsToMovies)
+    judgments = buildJudgments(tags, movies, mlensToTmdbId, tagsToMovies)
+    judgmentsToFile('genome_judgments.txt', judgments)
+
 
 
