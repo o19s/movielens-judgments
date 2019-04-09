@@ -1,7 +1,7 @@
 import csv
-from judgments import Judgment, judgmentsToFile
 
-def tagDict(tagsFile='ml-20m/genome-tags.csv'):
+def __tags_to_names(tagsFile='ml-latest/genome-tags.csv'):
+    """ Map tag ids to tag names"""
     rdr = csv.reader(open(tagsFile))
     next(rdr, None)
 
@@ -13,89 +13,78 @@ def tagDict(tagsFile='ml-20m/genome-tags.csv'):
 
     return tags
 
-def movieDict(moviesFile='ml-20m/movies.csv'):
+def __movies_to_titles(mlens_to_tmdb, moviesFile='ml-latest/movies.csv'):
+    """ Map movielens movie ids to movie names """
     rdr = csv.reader(open(moviesFile))
     next(rdr, None)
 
     moviesToName = {}
 
     for row in rdr:
-        movieId = row[0]; movieName=row[1]
-        moviesToName[movieId] = movieName
+        movieLensId = row[0]; movieName=row[1]
+        tmdb_id = mlens_to_tmdb[movieLensId]
+        moviesToName[tmdb_id] = movieName
 
     return moviesToName
 
 
-def tmdbIdLookup(moviesFile='ml-20m/links.csv'):
+def __movielens_to_tmdb(moviesFile='ml-latest/links.csv'):
     rdr = csv.reader(open(moviesFile))
     next(rdr, None)
 
     mlensToTmdb = {}
 
     for row in rdr:
-        movieId = row[0]; tmdbId=row[2]
-        mlensToTmdb[movieId] = tmdbId
+        movieLensId = row[0]; tmdbId=row[2]
+        mlensToTmdb[movieLensId] = tmdbId
 
     return mlensToTmdb
 
 
-def genomeTagged(genomeFile='ml-20m/genome-scores.csv'):
+def __tags_to_movies(mlens_to_tmdb, movies_to_titles, tags_to_names,
+                     genomeFile='ml-latest/genome-scores.csv'):
+    """ Tags with each movie scored """
     rdr = csv.reader(open(genomeFile))
     next(rdr, None)
 
     tagsToMovies = {}
 
     for row in rdr:
-        movieId = row[0]; tagId = row[1]; score=row[2]
-        if tagId not in tagsToMovies:
-            tagsToMovies[tagId] = []
+        movieLensId = row[0]; tagId = row[1]; score=row[2]
+        tmdb_id = mlens_to_tmdb[movieLensId]
+        tagName = tags_to_names[tagId]
+        if tagName not in tagsToMovies:
+            tagsToMovies[tagName] = []
 
-        tagsToMovies[tagId].append( (movieId, score) )
+        title = movies_to_titles[tmdb_id]
+        tagsToMovies[tagName].append( (tmdb_id, title, score) )
 
     # Sort each by score
     for tagId, scoredMovies in tagsToMovies.items():
-        scoredMovies.sort(key=lambda x: x[1], reverse=True)
+        scoredMovies.sort(key=lambda x: x[2], reverse=True)
 
     return tagsToMovies
 
+tags_to_movies = None
 
-def buildJudgments(tags, movies, mlensToTmdbId, tagsToMovies):
-    print("Building Judgments")
-    qid = 1
-    judgments = []
-    for tagId, scoredMovies in tagsToMovies.items():
-        tagName = tags[tagId]
-        for movie in scoredMovies:
-            score = float(movie[1])
-            movieId = movie[0]
-            #movieName = movies[movieId]
-            tmdbId = mlensToTmdbId[movieId]
-            grade = 0
+if tags_to_movies == None:
+    print("Loading movielens Data")
+    # Try pickle
+    import pickle
+    pklPath = '.tmdb_tags.pkl'
+    try:
+        with open(pklPath, 'rb') as f:
+            print("From Pickle...")
+            tags_to_movies = pickle.load(f)
+    except IOError:
+        print("From CSV...")
+        __mlens_to_tmdb = __movielens_to_tmdb()
+        __tags_to_names = __tags_to_names()
+        __movies_to_titles = __movies_to_titles(__mlens_to_tmdb)
 
-            if score >= 0.9:
-                grade = 4
-            elif score >= 0.8:
-                grade = 3
-            elif score >= 0.6:
-                grade = 2
-            elif score >= 0.4:
-                grade = 1
-
-            judgment = Judgment(grade=grade, qid=qid,
-                                keywords=tagName, docId=tmdbId)
-            judgments.append(judgment)
-        qid += 1
-    return judgments
-
-
-if __name__ == "__main__":
-    tags = tagDict()
-    movies = movieDict()
-    tagsToMovies = genomeTagged()
-    mlensToTmdbId = tmdbIdLookup()
-
-    judgments = buildJudgments(tags, movies, mlensToTmdbId, tagsToMovies)
-    judgmentsToFile('genome_judgments.txt', judgments)
-
-
-
+        tags_to_movies = __tags_to_movies(__mlens_to_tmdb, __movies_to_titles,
+                                          __tags_to_names)
+        tags = [tag_name for tag_name, _ in tags_to_movies.items()]
+        with open(pklPath, 'wb') as of:
+            pickle.dump(tags_to_movies, of)
+    tags = [tag_name for tag_name, _ in tags_to_movies.items()]
